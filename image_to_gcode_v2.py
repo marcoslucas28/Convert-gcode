@@ -1,0 +1,65 @@
+import cv2
+import numpy as np
+import svgpathtools
+from scipy import ndimage
+from PIL import Image
+
+def detect_edges(image_path, threshold=100):
+    """Aplica detecção de bordas usando Canny"""
+    image = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    blurred = cv2.GaussianBlur(image, (5, 5), 0)
+    edges = cv2.Canny(blurred, threshold, threshold * 2)
+    return edges
+
+def trace_contours(edges):
+    """Encontra contornos na imagem"""
+    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    return contours
+
+def convert_to_gcode(contours, scale=1.0):
+    """Converte contornos em G-code"""
+    gcode = ["G21 ; Set units to mm", "G90 ; Absolute positioning", "G1 Z5 F500"]
+    
+    for contour in contours:
+        points = contour.reshape(-1, 2) * scale
+        gcode.append(f"G0 X{points[0][0]:.2f} Y{points[0][1]:.2f}")
+        gcode.append("G1 Z0 F500")
+        
+        for x, y in points:
+            gcode.append(f"G1 X{x:.2f} Y{y:.2f}")
+        
+        gcode.append("G1 Z5 F500")
+    
+    gcode.append("M30 ; End of program")
+    return "\n".join(gcode)  # Retorna como string ao invés de salvar em arquivo
+
+def process_svg(svg_path, scale=1.0, use_curves=True):
+    """Converte SVG para G-code, com ou sem curvas"""
+    paths, _ = svgpathtools.svg2paths(svg_path)
+    gcode = ["G21", "G90", "G1 Z5 F500"]
+    
+    for path in paths:
+        for segment in path:
+            start = segment.start * scale
+            end = segment.end * scale
+            
+            if isinstance(segment, svgpathtools.Line):
+                gcode.append(f"G1 X{end.real:.2f} Y{end.imag:.2f}")
+            elif isinstance(segment, (svgpathtools.CubicBezier, svgpathtools.QuadraticBezier)):
+                if use_curves:
+                    gcode.append(f"G2 X{end.real:.2f} Y{end.imag:.2f} I{start.real - end.real:.2f} J{start.imag - end.imag:.2f}")
+                else:
+                    gcode.append(f"G1 X{end.real:.2f} Y{end.imag:.2f}")  # Sem curvas
+            
+    gcode.append("M30")
+    return "\n".join(gcode)  # Retorna como string
+
+def convert_image_to_gcode(image_path, use_curves=True):
+    """Detecta bordas e converte para G-code"""
+    edges = detect_edges(image_path)
+    contours = trace_contours(edges)
+    return convert_to_gcode(contours)
+
+def convert_svg_to_gcode(svg_path, use_curves=True):
+    """Converte SVG para G-code"""
+    return process_svg(svg_path, use_curves=use_curves)
