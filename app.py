@@ -1,5 +1,5 @@
 from flask import Flask, request, send_file
-from image_to_gcode import convert_image_to_gcode
+from image_to_gcode_v2 import convert_image_to_gcode, convert_svg_to_gcode
 import os
 
 app = Flask(__name__)

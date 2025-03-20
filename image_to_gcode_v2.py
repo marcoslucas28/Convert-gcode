@@ -14,10 +14,37 @@ def detect_edges(image_path, threshold=100):
 def trace_contours(edges):
     """Encontra contornos na imagem"""
     contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    return contours
+    return contours if contours else []
+
+def normalize_contours(contours, target_size=90):
+    """Redimensiona e centraliza os contornos para caber em target_size x target_size"""
+    if not contours:
+        return []  # Retorna uma lista vazia se não houver contornos
+    
+    all_points = np.vstack([c.reshape(-1, 2) for c in contours]) if contours else np.array([])
+    if all_points.size == 0:
+        return []  # Retorna lista vazia para evitar erro
+    
+    min_x, min_y = np.min(all_points, axis=0)
+    max_x, max_y = np.max(all_points, axis=0)
+    
+    width, height = max_x - min_x, max_y - min_y
+    scale = target_size / max(width, height)
+    
+    normalized_contours = []
+    for contour in contours:
+        scaled_contour = ((contour.reshape(-1, 2) - [min_x, min_y]) * scale)
+        centered_contour = scaled_contour + [(target_size - (width * scale)) / 2, (target_size - (height * scale)) / 2]
+        normalized_contours.append(centered_contour.astype(np.int32))
+    
+    return normalized_contours
 
 def convert_to_gcode(contours, scale=1.0):
     """Converte contornos em G-code"""
+    contours = normalize_contours(contours, target_size=90)
+    if not contours:
+        return "G21 ; Set units to mm\nG90 ; Absolute positioning\nM30 ; No contours found"
+    
     gcode = ["G21 ; Set units to mm", "G90 ; Absolute positioning", "G1 Z5 F500"]
     
     for contour in contours:
@@ -31,11 +58,14 @@ def convert_to_gcode(contours, scale=1.0):
         gcode.append("G1 Z5 F500")
     
     gcode.append("M30 ; End of program")
-    return "\n".join(gcode)  # Retorna como string ao invés de salvar em arquivo
+    return "\n".join(gcode)
 
 def process_svg(svg_path, scale=1.0, use_curves=True):
     """Converte SVG para G-code, com ou sem curvas"""
     paths, _ = svgpathtools.svg2paths(svg_path)
+    if not paths:
+        return "G21\nG90\nM30 ; No paths found"
+    
     gcode = ["G21", "G90", "G1 Z5 F500"]
     
     for path in paths:
@@ -52,7 +82,7 @@ def process_svg(svg_path, scale=1.0, use_curves=True):
                     gcode.append(f"G1 X{end.real:.2f} Y{end.imag:.2f}")  # Sem curvas
             
     gcode.append("M30")
-    return "\n".join(gcode)  # Retorna como string
+    return "\n".join(gcode)
 
 def convert_image_to_gcode(image_path, use_curves=True):
     """Detecta bordas e converte para G-code"""
