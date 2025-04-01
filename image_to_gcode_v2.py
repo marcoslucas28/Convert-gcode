@@ -13,10 +13,10 @@ def detect_edges(image_path, threshold=100):
 
 def trace_contours(edges):
     """Encontra contornos na imagem"""
-    contours, _ = cv2.findContours(edges, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     return contours if contours else []
 
-def normalize_contours(contours, target_size=90):
+def normalize_contours(contours, target_size=30):
     """Redimensiona e centraliza os contornos para caber em target_size x target_size"""
     if not contours:
         return []  # Retorna uma lista vazia se não houver contornos
@@ -41,7 +41,7 @@ def normalize_contours(contours, target_size=90):
 
 def convert_to_gcode(contours, scale=1.0):
     """Converte contornos em G-code"""
-    contours = normalize_contours(contours, target_size=90)
+    contours = normalize_contours(contours, target_size=30)
     if not contours:
         return "G21 ; Set units to mm\nG90 ; Absolute positioning\nM30 ; No contours found"
     
